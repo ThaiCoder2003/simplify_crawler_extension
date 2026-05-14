@@ -1,0 +1,29 @@
+{
+    "manifest_version": 3,
+    "name": "Simplify Crawler",
+    "version": "1.0",
+    "description": "Tự động thu thập dữ liệu việc làm từ Simplify.",
+    "permissions": ["scripting", "tabs", "downloads", "storage"],
+    "action": {
+        "default_title": "Simplify Job Crawler",
+        "default_icon": "icon.png"
+    },
+    "background": {
+        "service_worker": "background.js"
+     },
+    "host_permissions": [
+        "https://*.simplify.jobs/*",
+        "https://simplify.jobs/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": 
+                [
+                    "https://*.simplify.jobs/jobs*",
+                    "https://simplify.jobs/jobs*"
+            ],
+            "js": ["content.js"],
+            "css": ["styles.css"]
+        }
+    ]
+}
