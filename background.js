@@ -1,6 +1,6 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "saveToXLSX" && message.url) {
-    const filename = message.filename || "simplify_jobs.xlsx"; // dùng tên gửi từ content.js nếu có
+  if (message.action === "saveToCSV" && message.url) {
+    const filename = message.filename || "simplify_jobs.csv"; // dùng tên gửi từ content.js nếu có
     chrome.downloads.download({
       url: message.url,
       filename: filename,
