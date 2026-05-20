@@ -32,61 +32,6 @@ function log(...args) {
   console.log("[simplify Crawler]", ...args);
 }
 
-async function humanScroll() {
-  const jobList = document.querySelector(
-    '.flex.flex-col.gap-4.overflow-y-auto.p-4.sm\\:h-screen'
-  );
-
-  let stagnant = 0;
-
-  while (stagnant < 3) {
-    const before =
-      document.querySelectorAll(
-        '[data-testid="job-card"]'
-      ).length;
-
-    // Scroll near bottom gently
-    jobList.scrollTo({
-      top: jobList.scrollHeight - 150,
-      behavior: 'smooth'
-    });
-
-    console.log("Scrolled near bottom");
-
-    let loaded = false;
-
-    // Wait up to 15 sec for new cards
-    for (let i = 0; i < 15; i++) {
-      await wait(1000);
-
-      const after =
-        document.querySelectorAll(
-          '[data-testid="job-card"]'
-        ).length;
-
-      if (after > before) {
-        console.log(
-          `Loaded more cards: ${before} -> ${after}`
-        );
-
-        loaded = true;
-        stagnant = 0;
-
-        break;
-      }
-    }
-
-    if (!loaded) {
-      stagnant++;
-      console.log(
-        `No new cards (${stagnant}/3)`
-      );
-    }
-  }
-
-  console.log("Reached end");
-}
-
 function getDocumentName() {
   const original =
     "Simplify Jobs";
@@ -155,6 +100,7 @@ function createPanel() {
   document.body.appendChild(panel);
 
   document.getElementById("simplify-start-btn").onclick = () => {
+    hasExported = false;
     const inputVal = parseInt(document.getElementById("max-jobs-input").value);
     if (!isNaN(inputVal) && inputVal > 0) {
       maxJobs = inputVal;
@@ -304,15 +250,10 @@ async function crawlLoop() {
       log("Không còn job mới.");
       break;
     }
-
-    // Scroll further down
-    const scrollContainer = document.querySelector(
-      ".overflow-x-hidden.bg-white.xl\\:w-1\\/3"
-    );
     
     // If there are still jobs to crawl but we can't find new cards, try scrolling the container instead of the job list
     if (allJobs.length < maxJobs) {
-      humanScroll();
+      await humanScroll();
     }
 
     processedCardCount = afterCount;
@@ -320,7 +261,18 @@ async function crawlLoop() {
     await randomDelay(2000, 4000);
   }
 
+  isCrawling = false;
+
+  chrome.storage.local.set({
+    isCrawling: false
+  });
+
+  document.getElementById(
+    "simplify-start-btn"
+  ).disabled = false;
+
   if (allJobs.length) {
+    hasExported = true;
     exportCSV()
   }
 }
@@ -447,7 +399,7 @@ function exportCSV() {
   .replace(/[\\/:*?"<>|]/g, "_")
   .slice(0, 50);
 
-  const filename = `$${documentName}.csv`;
+  const filename = `${documentName}.csv`;
 
   chrome.runtime.sendMessage({ action: "saveToCSV", url, filename });
 }
