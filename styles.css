@@ -62,3 +62,10 @@
 #simplify-crawler-table th {
   background: #f0f0f0;
 }
+
+.simplify-number-input {
+  width: 90px;
+  padding: 2px 4px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}

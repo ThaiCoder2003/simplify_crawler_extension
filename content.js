@@ -1,8 +1,8 @@
 let isCrawling = false;
-let currentJob = 0;
 let allJobs = [];
 let maxJobs = 1; // số lượng job tối đa
 let hasExported = false;
+let processedCardCount = 0;
 
 let existingKeys = new Set();
 
@@ -30,6 +30,67 @@ function randomDelay(min = 1200, max = 3500) {
 
 function log(...args) {
   console.log("[simplify Crawler]", ...args);
+}
+
+async function humanScroll() {
+  const jobList = document.querySelector(
+    '.flex.flex-col.gap-4.overflow-y-auto.p-4.sm\\:h-screen'
+  );
+
+  let stagnant = 0;
+
+  while (stagnant < 3) {
+    const before =
+      document.querySelectorAll(
+        '[data-testid="job-card"]'
+      ).length;
+
+    // Scroll near bottom gently
+    jobList.scrollTo({
+      top: jobList.scrollHeight - 150,
+      behavior: 'smooth'
+    });
+
+    console.log("Scrolled near bottom");
+
+    let loaded = false;
+
+    // Wait up to 15 sec for new cards
+    for (let i = 0; i < 15; i++) {
+      await wait(1000);
+
+      const after =
+        document.querySelectorAll(
+          '[data-testid="job-card"]'
+        ).length;
+
+      if (after > before) {
+        console.log(
+          `Loaded more cards: ${before} -> ${after}`
+        );
+
+        loaded = true;
+        stagnant = 0;
+
+        break;
+      }
+    }
+
+    if (!loaded) {
+      stagnant++;
+      console.log(
+        `No new cards (${stagnant}/3)`
+      );
+    }
+  }
+
+  console.log("Reached end");
+}
+
+function getDocumentName() {
+  const original =
+    "Simplify Jobs";
+    return `${original} (${allJobs.length} crawled)`;
 }
 
 function getCurrentJobId() {
@@ -69,7 +130,7 @@ function createPanel() {
       <button id="simplify-reset-btn">Xóa Dữ Liệu</button>
       <label style="margin-left: 10px;">
         Số job tối đa:
-        <input type="number" id="max-jobs-input" value="${maxJobs}" min="1" style="width: 50px;"/>
+        <input type="number" id="max-jobs-input" value="${maxJobs}" min="1" class="simplify-number-input"/>
       </label>
     </div>
     <div id="simplify-crawler-status">Chưa bắt đầu.</div>
@@ -116,7 +177,6 @@ function createPanel() {
   document.getElementById("simplify-reset-btn").onclick = () => {
     chrome.storage.local.clear();
     allJobs = [];
-    currentJob = 1;
     isCrawling = false;
     hasExported = false;
     existingKeys.clear();
@@ -131,10 +191,11 @@ function updateStatus(text) {
   log(text);
 }
 
+
 function appendToTable(job) {
   const row = document.createElement("tr");
   row.innerHTML = `
-    <td>${job.id || "N/A"}</td>
+    <td>${job.jobId || "N/A"}</td>
     <td>${job.jobUrl || "N/A"}</td>
     <td>${job.company || "N/A"}</td>
     <td>${job.title || "N/A"}</td>
@@ -144,6 +205,66 @@ function appendToTable(job) {
     <td>${job.workplaceType || "N/A"}</td>
   `;
   document.querySelector("#simplify-crawler-table tbody").appendChild(row);
+}
+
+async function humanScroll() {
+  const jobList = document.querySelector(
+    '.flex.flex-col.gap-4.overflow-y-auto.p-4.sm\\:h-screen'
+  );
+
+  let stagnant = 0;
+
+  while (stagnant < 3) {
+    const before =
+      document.querySelectorAll(
+        '[data-testid="job-card"]'
+      ).length;
+
+    // Scroll near bottom gently
+    jobList.scrollTo({
+      top: jobList.scrollHeight - 150,
+      behavior: 'smooth'
+    });
+
+    console.log("Scrolled near bottom");
+
+    let loaded = false;
+
+    // Wait up to 15 sec for new cards
+    for (let i = 0; i < 15; i++) {
+      await wait(2000);
+
+      const after =
+        document.querySelectorAll(
+          '[data-testid="job-card"]'
+        ).length;
+
+      if (after > before) {
+        console.log(
+          `Loaded more cards: ${before} -> ${after}`
+        );
+
+        loaded = true;
+        stagnant = 0;
+
+        break;
+      }
+    }
+
+    if (!loaded) {
+      stagnant++;
+      console.log(
+        `No new cards (${stagnant}/3)`
+      );
+    }
+
+    else {
+      // It's already loaded more. Stop now until new cards are finished crawling for the next batch
+      break;
+    }
+  }
+
+  console.log("Reached end");
 }
 
 async function startCrawl() {
@@ -185,10 +306,16 @@ async function crawlLoop() {
     }
 
     // Scroll further down
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth"
-    });
+    const scrollContainer = document.querySelector(
+      ".overflow-x-hidden.bg-white.xl\\:w-1\\/3"
+    );
+    
+    // If there are still jobs to crawl but we can't find new cards, try scrolling the container instead of the job list
+    if (allJobs.length < maxJobs) {
+      humanScroll();
+    }
+
+    processedCardCount = afterCount;
 
     await randomDelay(2000, 4000);
   }
@@ -200,10 +327,10 @@ async function crawlLoop() {
 
 async function crawlJobs(timeout = 15000) {
   const cards = document.querySelectorAll('[data-testid="job-card"]')
+    const newCards = [...cards].slice(processedCardCount);
+  log(`Tìm thấy ${newCards.length} card mới`);
 
-  log(`Tìm thấy ${cards.length} cards`);
-
-  for (const card of cards) {
+  for (const card of newCards) {
     if (
       !isCrawling ||
       allJobs.length >= maxJobs
@@ -224,7 +351,7 @@ async function crawlJobs(timeout = 15000) {
         ...card.querySelectorAll(
           ".rounded-full"
         )
-      ].map(el => el.innerHTML.trim());
+      ].map(el => el.textContent.replace(/\s+/g, ' ').trim());
 
       const employmentTypes = [
         "Full-Time",
@@ -251,19 +378,21 @@ async function crawlJobs(timeout = 15000) {
           workplaceTypes.includes(t)
         ) || "";
 
-      const salary =
-        tags.find(t =>
-          t.includes("$")
-        ) || "";
+const salaryRegex =
+  /(\$|€|£|₫|VND|\bvnd\b|¥|￥|円|元|RMB|CNY|\brmb\b|\bcny\b|yuan|k\/yr|k\/hr|k\/mo|k\/month|per\s?(?:year|yr|month|mo|hour|hr)|\/(?:yr|mo|hr)|salary|tháng|năm)/i;
 
-      const location =
-        tags.find(t =>
-          !employmentTypes.includes(t) &&
-          !workplaceTypes.includes(t) &&
-          !t.includes("$")
-        ) || "";
+const salary =
+  tags.find(t =>
+    salaryRegex.test(t)
+  ) || "";
 
+const location =
+  tags.find(t =>
+    /,/.test(t)
+  ) || "";
       card.click();
+
+      await randomDelay(300, 700);
 
       const jobId = getCurrentJobId();
 
@@ -288,7 +417,7 @@ async function crawlJobs(timeout = 15000) {
         workplaceType
       };
 
-      allJobs(job);
+      allJobs.push(job);
 
       appendToTable(job);
       
@@ -314,9 +443,13 @@ function exportCSV() {
   const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
 
-  const jobCount = allJobs.length;
-  const pageTitle = document.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 30);
-  const filename = `${jobCount}_jobs_${pageTitle}.csv`;
+  const documentName = getDocumentName()
+  .replace(/[\\/:*?"<>|]/g, "_")
+  .slice(0, 50);
+
+  const filename = `$${documentName}.csv`;
 
   chrome.runtime.sendMessage({ action: "saveToCSV", url, filename });
 }
+
+createPanel();
